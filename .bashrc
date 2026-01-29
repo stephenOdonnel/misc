@@ -1,8 +1,6 @@
 # ~/.bashrc
-echo "Hello Stephen"
-# -----------------------------
-# Basic environment
-# -----------------------------
+echo "Hello $USER "
+
 export SHELL=/bin/bash
 export VISUAL="vim"
 export EDITOR="$VISUAL"
@@ -18,27 +16,8 @@ PROMPT_COMMAND="history -a${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 # Window size
 shopt -s checkwinsize
 
-# -----------------------------
-# Bash completion (Homebrew)
-# -----------------------------
-if [[ -r /opt/homebrew/etc/profile.d/bash_completion.sh ]]; then
-    source /opt/homebrew/etc/profile.d/bash_completion.sh
-elif [[ -r /usr/local/etc/profile.d/bash_completion.sh ]]; then
-    source /usr/local/etc/profile.d/bash_completion.sh
-fi
 
-# -----------------------------
-# Git branch prompt
-# -----------------------------
-if [[ -f /opt/homebrew/etc/bash_completion.d/git-prompt.sh ]]; then
-    source /opt/homebrew/etc/bash_completion.d/git-prompt.sh
-elif [[ -f /usr/local/etc/bash_completion.d/git-prompt.sh ]]; then
-    source /usr/local/etc/bash_completion.d/git-prompt.sh
-fi
-
-# -----------------------------
-# FZF setup (Homebrew)
-# -----------------------------
+# FZF setup 
 [[ -f ~/.fzf.bash ]] && source ~/.fzf.bash
 export FZF_DEFAULT_OPTS='--layout=reverse --info=inline'
 if command -v ag &>/dev/null && command -v fzf &>/dev/null; then
@@ -46,35 +25,67 @@ if command -v ag &>/dev/null && command -v fzf &>/dev/null; then
     export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 fi
 
-# -----------------------------
-# Prompt function
-# -----------------------------
+[[ $- != *i* ]] && return
+
+# Bash completion
+if [[ -r /opt/homebrew/etc/profile.d/bash_completion.sh ]]; then
+    source /opt/homebrew/etc/profile.d/bash_completion.sh
+elif [[ -r /usr/local/etc/profile.d/bash_completion.sh ]]; then
+    source /usr/local/etc/profile.d/bash_completion.sh
+fi
+
+# Git prompt
+if [[ -f /opt/homebrew/etc/bash_completion.d/git-prompt.sh ]]; then
+    source /opt/homebrew/etc/bash_completion.d/git-prompt.sh
+elif [[ -f /usr/local/etc/bash_completion.d/git-prompt.sh ]]; then
+    source /usr/local/etc/bash_completion.d/git-prompt.sh
+fi
+
+export GIT_PS1_SHOWDIRTYSTATE=1
+export GIT_PS1_SHOWUNTRACKEDFILES=1
+export GIT_PS1_SHOWUPSTREAM=auto
+
 set_bash_prompt() {
     local reset="\[\033[0m\]"
-    local userhost="\[\033[1;32m\]\u@\h\[\033[0m\]"
-    local dir="\[\033[1;34m\]\w\[\033[0m\]"
+    local user="\[\033[0;36m\]\u${reset}"        # pastel cyan
+    local host=""
+    local path="\[\033[0;34m\]\w${reset}"        # pastel blue
     local git_branch=""
+    local status=""
 
-    if command -v __git_ps1 &>/dev/null; then
-        git_branch=$(__git_ps1 " (\[\033[1;33m\]%s\[\033[0m\])")
+    # Show hostname only if non-local
+    if [[ -n "$HOSTNAME" ]] && [[ "$HOSTNAME" != "localhost" ]] && [[ "$HOSTNAME" != "$(hostname)" ]]; then
+        host="@\[\033[0;35m\]$HOSTNAME${reset}"   # pastel magenta
     fi
 
-    PS1="${userhost}:${dir}${git_branch}$ "
+    # Git branch
+    if declare -F __git_ps1 >/dev/null; then
+        git_branch=$(__git_ps1 "(\[\033[0;32m\]%s${reset})")  # pastel yellow
+    fi
+
+    # Last command status
+    if [[ $? -eq 0 ]]; then
+        status="\[\033[0;32m\]✔${reset}"  # green check
+    else
+        status="\[\033[0;31m\]✗${reset}"  # red X
+    fi
+
+    PS1="${status} ${user}${host}:${path}${git_branch}$ "
 }
 
-# Append to PROMPT_COMMAND safely
-PROMPT_COMMAND="set_bash_prompt${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+PROMPT_COMMAND=set_bash_prompt
 
-# -----------------------------
+
+
+# 
 # Aliases
-# -----------------------------
+# 
 
 alias c='clear'
 alias q='exit'
 alias h='history'
 alias r='fh'
 
-# macOS-safe ls colors
 alias ls='ls -h -G'
 alias ll='ls -alF'
 alias la='ls -A'
@@ -82,26 +93,23 @@ alias l='ls -CF'
 
 alias grep='grep --color=auto'
 
-# Safer file ops
 alias rm='rm -i'
 alias cp='cp -i'
 alias mv='mv -i'
 
-# Navigation
 alias .='cd ..'
 alias ..='cd ../..'
 alias ...='cd ../../..'
 
-# -----------------------------
+#
 # Functions
-# -----------------------------
+#
 
-# mkdir + cd safely
+# mkdir + cd 
 mkcd() {
     mkdir -p -- "$1" && cd -- "$1"
 }
 
-# Depth-limited fuzzy cd using find + fzf
 fd() {
     local depth="${1:-3}"
     local dir
@@ -114,10 +122,9 @@ ws() {
     local depth="${1:-3}"       # default depth = 3
     local dir
 
-    # Go to your workspace root
     cd "$HOME/Desktop/coding" || return
 
-    # Use find with maxdepth and skip hidden directories
+
     dir=$(find . \
           -maxdepth "$depth" \
           -type d \
@@ -125,41 +132,35 @@ ws() {
           ! -path '*/node_modules/*' \
           | fzf --prompt="ws (depth=$depth)> ") || return
 
-    # Change to selected directory safely
     cd -- "$dir"
 }
-# -----------------------------
+
 # Fuzzy search history 
-# -----------------------------
 __fzf_history_exec() {
     local cmd
-    # Get history (newest first)
+
     cmd=$(fc -rl 1 | fzf --tac --no-sort) || return
-    # Strip leading history number
     cmd=${cmd#*[[:space:]]}
-    # Execute immediately
+
     eval "$cmd"
 }
 
 # Unbind default Ctrl-R (reverse-i-search)
 bind -r '\C-r'
 
-# Bind Ctrl-R to our fzf history exec
+# Bind Ctrl-R to fzf history 
 bind -x '"\C-r": "__fzf_history_exec"'
 
 
 
-# -----------------------------
-# Fuzzy VS Code launcher in ~/Desktop/code
-# -----------------------------
+
+#Fuzzy VS Code launcher in ~/Desktop/code
 vf() {
     local dir
-    local base="$HOME/Desktop/coding"   # base directory to search
+    local base="$HOME/Desktop/coding"  
 
-    # Make sure base exists
     [ -d "$base" ] || { echo "Directory $base not found"; return; }
 
-    # Fuzzy select a directory with depth limit 3, skip hidden dirs
     dir=$(find "$base" -maxdepth 3 -type d ! -path '*/.*' ! -path '*/node_modules/*' | fzf --prompt="vf> ") || return
 
     # Open selected folder in VS Code
@@ -167,16 +168,14 @@ vf() {
 }
 
 
-# -----------------------------
-# VS Code launcher
-# -----------------------------
+
 vscode() {
     if command -v code &>/dev/null; then
         if [[ -z "$1" ]]; then
-            # No argument → open current directory
+        
             code .
         else
-            # Open specified file or folder
+           
             code "$1"
         fi
     else
